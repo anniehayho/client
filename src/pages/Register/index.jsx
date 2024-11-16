@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@chakra-ui/react';
+import ioClient from 'socket.io-client';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleInputChange = (e) => {
     setFormData({
@@ -33,10 +35,13 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
-
     setLoading(true);
     setError('');
+
+    if (!validateForm()) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch('http://localhost:5000/api/auth/register', {
@@ -47,7 +52,7 @@ const Register = () => {
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
-          password: formData.password
+          password: formData.password,
         }),
       });
 
@@ -61,8 +66,25 @@ const Register = () => {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // Redirect to chat page
-      window.location.href = '/chat';
+      // Connect to socket
+      const socket = ioClient('http://localhost:5000', {
+        auth: {
+          token: localStorage.getItem('token')
+        }
+      });
+
+      // Handle socket connection
+      socket.on('connect', () => {
+        console.log('Socket connected');
+      });
+
+      socket.on('connect_error', (err) => {
+        console.error('Socket connection error:', err);
+        setError('Failed to establish real-time connection');
+      });
+
+      // Navigate to chat page on success
+      navigate('/chat');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -89,11 +111,17 @@ const Register = () => {
         </div>
 
         {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="rounded-md bg-red-50 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <AlertCircle size={24} />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Registration failed</h3>
+                <div className="mt-2 text-sm text-red-700">{error}</div>
+              </div>
+            </div>
+          </div>
         )}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
