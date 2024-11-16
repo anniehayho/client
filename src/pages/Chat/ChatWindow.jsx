@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@chakra-ui/react';
+import ioClient from 'socket.io-client';
 
 const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
@@ -12,6 +13,7 @@ const ChatWindow = () => {
   const messagesEndRef = useRef(null);
   const user = JSON.parse(localStorage.getItem('user'));
   const token = localStorage.getItem('token');
+  const socket = useRef(null);
 
   useEffect(() => {
     if (!token) {
@@ -19,11 +21,36 @@ const ChatWindow = () => {
       return;
     }
     fetchFriends();
-  }, []);
+    socket.current = ioClient('http://localhost:5000', {
+      auth: {
+        token: localStorage.getItem('token')
+      }
+    });
+
+    socket.current.on('connect', () => {
+      console.log('Socket connected');
+    });
+
+    socket.current.on('receive-message', (message) => {
+      setMessages((prevMessages) => [...prevMessages, message]);
+    });
+
+    socket.current.on('user-status', (onlineUsers) => {
+      setOnlineUsers(onlineUsers);
+    });
+
+    socket.current.on('disconnect', () => {
+      console.log('Socket disconnected');
+    });
+
+    return () => {
+      socket.current.disconnect();
+    };
+  }, [token]);
 
   useEffect(() => {
     if (selectedFriend) {
-      fetchMessages(selectedFriend.id);
+      fetchMessages(selectedFriend._id);
     }
   }, [selectedFriend]);
 
@@ -80,14 +107,18 @@ const ChatWindow = () => {
         },
         body: JSON.stringify({
           content: newMessage,
-          receiverId: selectedFriend.id
+          receiverId: selectedFriend._id
         })
       });
 
       if (response.ok) {
         const data = await response.json();
-        setMessages(prev => [...prev, data]);
+        setMessages((prev) => [...prev, data]);
         setNewMessage('');
+        socket.current.emit('send-message', {
+          content: newMessage,
+          receiver: selectedFriend._id
+        });
       }
     } catch (err) {
       setError('Failed to send message');
@@ -120,21 +151,23 @@ const ChatWindow = () => {
         </div>
         
         <div className="flex-1 overflow-y-auto">
-          {friends.map((friend) => (
+          {friends && friends.map((friend) => (
             <div
-              key={friend.id}
+              key={friend._id}
               onClick={() => setSelectedFriend(friend)}
               className={`p-4 border-b cursor-pointer hover:bg-gray-50 flex items-center ${
-                selectedFriend?.id === friend.id ? 'bg-blue-50' : ''
+                selectedFriend?.id === friend._id ? 'bg-blue-50' : ''
               }`}
             >
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                {friend.username[0].toUpperCase()}
+                {friend.requester._id === user.id ? friend.recipient.username : friend.requester.username}
               </div>
               <div>
-                <div className="font-medium">{friend.username}</div>
+                <div className="font-medium">
+                  {friend.requester._id === user.id ? friend.recipient.username : friend.requester.username}
+                </div>
                 <div className="text-sm text-gray-500">
-                  {onlineUsers.includes(friend.id) ? 'Online' : 'Offline'}
+                  {onlineUsers.includes(friend.requester._id === user.id ? friend.recipient._id : friend.requester._id) ? 'Online' : 'Offline'}
                 </div>
               </div>
             </div>
@@ -160,7 +193,7 @@ const ChatWindow = () => {
                 </Alert>
               )}
               
-              {messages.map((message, index) => (
+              {messages && messages.map((message, index) => (
                 <div
                   key={index}
                   className={`mb-4 flex ${
