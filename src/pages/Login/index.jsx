@@ -1,28 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import ioClient from 'socket.io-client';
 
 const Login = () => {
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  // Memoize API URL
+  const API_URL = useMemo(() => 'http://localhost:5000', []);
 
-  const handleSubmit = async (e) => {
+  // Memoize input change handler
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  // Memoize submit handler
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
+    
+    if (!formData.email || !formData.password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      // Login request
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -36,35 +49,70 @@ const Login = () => {
         throw new Error(data.error || 'Login failed');
       }
 
-      //Store token and user data
+      // Store user data
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // Connect to socket
-      const socket = ioClient('http://localhost:5000', {
-        auth: {
-          token: localStorage.getItem('token')
-        }
+      // Initialize socket connection
+      const socket = ioClient(API_URL, {
+        auth: { token: data.token },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 3,
       });
 
-      //Handle socket connection
-      socket.on('connect', () => {
-        console.log('Socket connected');
-      });
+      // Socket event handlers
+      const handleConnect = () => {
+        navigate('/chat');
+      };
 
-      socket.on('connect_error', (err) => {
+      const handleError = (err) => {
         console.error('Socket connection error:', err);
-        setError('Failed to establish real-time connection');
-      });
+        // Don't block login for socket errors
+        navigate('/chat');
+      };
 
-      // Navigate to chat page on success
-      navigate('/chat');
+      socket.on('connect', handleConnect);
+      socket.on('connect_error', handleError);
+
+      // Cleanup socket listeners if connection takes too long
+      const timeout = setTimeout(() => {
+        socket.off('connect', handleConnect);
+        socket.off('connect_error', handleError);
+        navigate('/chat');
+      }, 3000);
+
+      return () => {
+        clearTimeout(timeout);
+        socket.off('connect', handleConnect);
+        socket.off('connect_error', handleError);
+      };
+
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, API_URL, navigate]);
+
+  // Memoize error alert component
+  const ErrorAlert = useMemo(() => {
+    if (!error) return null;
+    
+    return (
+      <div className="rounded-md bg-red-50 p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">Login failed</h3>
+            <div className="mt-2 text-sm text-red-700">{error}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }, [error]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -77,26 +125,14 @@ const Login = () => {
             Or{' '}
             <a
               href="/register"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
             >
               create a new account
             </a>
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <AlertCircle size={24} />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Login failed</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
-              </div>
-            </div>
-          </div>
-        )}
+        {ErrorAlert}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm space-y-4">
@@ -112,7 +148,7 @@ const Login = () => {
                 required
                 value={formData.email}
                 onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors"
                 placeholder="Email address"
               />
             </div>
@@ -128,7 +164,7 @@ const Login = () => {
                 required
                 value={formData.password}
                 onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors"
                 placeholder="Password"
               />
             </div>
@@ -140,7 +176,7 @@ const Login = () => {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors"
               />
               <label
                 htmlFor="remember-me"
@@ -153,7 +189,7 @@ const Login = () => {
             <div className="text-sm">
               <button
                 type="button"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 onClick={() => alert('Forgot password functionality not implemented yet')}
               >
                 Forgot your password?
@@ -164,35 +200,48 @@ const Login = () => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               disabled={loading}
+              className={`
+                group relative w-full flex justify-center py-2 px-4 border border-transparent
+                text-sm font-medium rounded-md text-white
+                ${loading 
+                  ? 'bg-blue-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700'
+                }
+                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+                transition-colors duration-200
+              `}
             >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                {loading && (
-                  <svg
-                    className="h-5 w-5 text-blue-500 group-hover:text-blue-400"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
+              {loading ? (
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
                     stroke="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                    />
-                  </svg>
-                )}
-              </span>
-              Sign in
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              ) : (
+                'Sign in'
+              )}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
-}
+};
 
-export default Login;
+export default React.memo(Login);
