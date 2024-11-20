@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Send, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@chakra-ui/react';
+import { Send } from 'lucide-react';
 import ioClient from 'socket.io-client';
 import AddFriend from './AddFriend';
+import ChatSidebar from './ChatSidebar';
 
 const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
@@ -14,11 +14,11 @@ const ChatWindow = () => {
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
   
-  // Memoize user and token to prevent unnecessary re-renders
+  // Memoize user and token
   const user = useMemo(() => JSON.parse(localStorage.getItem('user') || '{}'), []);
   const token = useMemo(() => localStorage.getItem('token'), []);
 
-  // Memoize API calls
+  // API calls
   const fetchFriends = useCallback(async () => {
     try {
       const response = await fetch('http://localhost:5000/api/friends/list', {
@@ -59,7 +59,7 @@ const ChatWindow = () => {
     setOnlineUsers(users);
   }, []);
 
-  // Initialize socket connection
+  // Socket initialization
   useEffect(() => {
     if (!token) {
       window.location.href = '/login';
@@ -90,19 +90,17 @@ const ChatWindow = () => {
     };
   }, [token, fetchFriends, handleReceiveMessage, handleUserStatus]);
 
-  // Fetch messages when selecting a friend
   useEffect(() => {
     if (selectedFriend?._id) {
       fetchMessages(selectedFriend._id);
     }
   }, [selectedFriend?._id, fetchMessages]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handlers
+  // Event handlers
   const handleSendMessage = useCallback(async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedFriend) return;
@@ -139,29 +137,6 @@ const ChatWindow = () => {
     window.location.href = '/login';
   }, []);
 
-  // Memoized friend list rendering
-  const friendsList = useMemo(() => {
-    return friends.map((friend) => (
-      <div
-        key={friend._id}
-        onClick={() => setSelectedFriend(friend)}
-        className={`p-4 border-b cursor-pointer hover:bg-gray-50 flex items-center ${
-          selectedFriend?.id === friend._id ? 'bg-blue-50' : ''
-        }`}
-      >
-        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-          {friend.username?.[0]?.toUpperCase()}
-        </div>
-        <div>
-          <div className="font-medium">{friend.username}</div>
-          <div className="text-sm text-gray-500">
-            {onlineUsers.includes(friend._id) ? 'Online' : 'Offline'}
-          </div>
-        </div>
-      </div>
-    ));
-  }, [friends, selectedFriend?.id, onlineUsers]);
-
   // Memoized messages rendering
   const messagesList = useMemo(() => {
     return messages.map((message, index) => (
@@ -184,28 +159,15 @@ const ChatWindow = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-80 bg-white border-r flex flex-col">
-        <div className="p-4 border-b">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Chats</h2>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-            >
-              Logout
-            </button>
-          </div>
-          <div className="text-sm text-gray-500">
-            Logged in as: {user?.username || 'Guest'}
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {friendsList}
-        </div>
-      </div>
+      <ChatSidebar 
+        friends={friends}
+        selectedFriend={selectedFriend}
+        onSelectFriend={setSelectedFriend}
+        onlineUsers={onlineUsers}
+        onLogout={handleLogout}
+        currentUser={user}
+      />
 
-      {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {selectedFriend ? (
           <>
@@ -229,7 +191,7 @@ const ChatWindow = () => {
                   type="submit"
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  Send
+                  <Send className="w-5 h-5" />
                 </button>
               </div>
             </form>
@@ -241,7 +203,6 @@ const ChatWindow = () => {
         )}
       </div>
 
-      {/* Friend List Sidebar */}
       <div className="w-80 bg-white border-r flex flex-col">
         <AddFriend token={token} onlineUsers={onlineUsers} />
       </div>
@@ -249,4 +210,4 @@ const ChatWindow = () => {
   );
 };
 
-export default ChatWindow;
+export default React.memo(ChatWindow);
