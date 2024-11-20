@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@chakra-ui/react';
 import ioClient from 'socket.io-client';
+import AddFriend from './AddFriend';
 
 const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
@@ -260,7 +261,12 @@ const ChatWindow = () => {
             Select a conversation to start chatting
           </div>
         )}
+
       </div>
+      <div className="w-80 bg-white border-r flex flex-col">
+        <AddFriend token={token} onlineUsers={onlineUsers}/>
+      </div>
+      
     </div>
   );
 };
