@@ -137,6 +137,11 @@ const ChatWindow = () => {
     window.location.href = '/login';
   }, []);
 
+  // Handle friends update
+  const handleFriendsUpdate = useCallback(async () => {
+    await fetchFriends();
+  }, [fetchFriends]);
+
   // Memoized messages rendering
   const messagesList = useMemo(() => {
     return messages.map((message, index) => (
@@ -166,6 +171,8 @@ const ChatWindow = () => {
         onlineUsers={onlineUsers}
         onLogout={handleLogout}
         currentUser={user}
+        token={token}
+        onFriendsUpdate={handleFriendsUpdate}
       />
 
       <div className="flex-1 flex flex-col">
