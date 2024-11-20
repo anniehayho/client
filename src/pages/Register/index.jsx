@@ -1,59 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import ioClient from 'socket.io-client';
 
 const Register = () => {
-  const [formData, setFormData] = useState({
+  // Initial form state
+  const initialFormState = {
     username: '',
     email: '',
     password: '',
     confirmPassword: ''
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  // Memoize API URL
+  const API_URL = useMemo(() => 'http://localhost:5000', []);
 
-  const validateForm = () => {
+  // Validation rules
+  const validationRules = useMemo(() => ({
+    password: {
+      minLength: 6,
+      message: 'Password must be at least 6 characters long'
+    },
+    confirmPassword: {
+      match: 'password',
+      message: 'Passwords do not match'
+    }
+  }), []);
+
+  // Memoize form validation
+  const validateForm = useCallback(() => {
+    // Password length check
+    if (formData.password.length < validationRules.password.minLength) {
+      setError(validationRules.password.message);
+      return false;
+    }
+
+    // Password match check
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError(validationRules.confirmPassword.message);
       return false;
     }
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
       return false;
     }
+
     return true;
-  };
+  }, [formData, validationRules]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // Memoize input change handler
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
     setError('');
+  }, []);
 
+  // Memoize socket initialization
+  const initializeSocket = useCallback((token) => {
+    const socket = ioClient(API_URL, {
+      auth: { token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 3,
+    });
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        socket.disconnect();
+        resolve(); // Don't reject, just proceed with navigation
+      }, 3000);
+
+      socket.on('connect', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      socket.on('connect_error', (err) => {
+        clearTimeout(timeout);
+        console.error('Socket connection error:', err);
+        resolve(); // Don't reject, just proceed with navigation
+      });
+    });
+  }, [API_URL]);
+
+  // Memoize submit handler
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    
     if (!validateForm()) {
-      setLoading(false);
       return;
     }
 
+    setLoading(true);
+    setError('');
+
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const { confirmPassword, ...registrationData } = formData;
+      
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-        }),
+        body: JSON.stringify(registrationData),
       });
 
       const data = await response.json();
@@ -62,35 +123,43 @@ const Register = () => {
         throw new Error(data.error || 'Registration failed');
       }
 
-      // Store token and user data
+      // Store user data
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // Connect to socket
-      const socket = ioClient('http://localhost:5000', {
-        auth: {
-          token: localStorage.getItem('token')
-        }
-      });
+      // Initialize socket connection
+      await initializeSocket(data.token);
 
-      // Handle socket connection
-      socket.on('connect', () => {
-        console.log('Socket connected');
-      });
-
-      socket.on('connect_error', (err) => {
-        console.error('Socket connection error:', err);
-        setError('Failed to establish real-time connection');
-      });
-
-      // Navigate to chat page on success
+      // Navigate to chat page
       navigate('/chat');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, validateForm, API_URL, navigate, initializeSocket]);
+
+  // Memoize error alert component
+  const ErrorAlert = useMemo(() => {
+    if (!error) return null;
+
+    return (
+      <div className="rounded-md bg-red-50 p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">Registration failed</h3>
+            <div className="mt-2 text-sm text-red-700">{error}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }, [error]);
+
+  // Common input class
+  const inputClassName = "appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -103,132 +172,80 @@ const Register = () => {
             Already have an account?{' '}
             <a
               href="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
             >
               Sign in
             </a>
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <AlertCircle size={24} />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Registration failed</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
-              </div>
-            </div>
-          </div>
-        )}
+        {ErrorAlert}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="username" className="sr-only">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                value={formData.username}
-                onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={formData.email}
-                onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={formData.password}
-                onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="sr-only">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm Password"
-              />
-            </div>
+            {['username', 'email', 'password', 'confirmPassword'].map((field) => (
+              <div key={field}>
+                <label htmlFor={field} className="sr-only">
+                  {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                </label>
+                <input
+                  id={field}
+                  name={field}
+                  type={field.includes('password') ? 'password' : field === 'email' ? 'email' : 'text'}
+                  autoComplete={field === 'email' ? 'email' : field === 'username' ? 'username' : undefined}
+                  required
+                  value={formData[field]}
+                  onChange={handleInputChange}
+                  className={inputClassName}
+                  placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                />
+              </div>
+            ))}
           </div>
 
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              disabled={loading}
-            >
-              {loading && (
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                </span>
-              )}
-              Create Account
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`
+              group relative w-full flex justify-center py-2 px-4 border border-transparent
+              text-sm font-medium rounded-md text-white
+              ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}
+              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+              transition-colors duration-200
+            `}
+          >
+            {loading ? (
+              <svg
+                className="animate-spin h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
+              'Create Account'
+            )}
+          </button>
         </form>
 
         <div className="text-sm text-center text-gray-600">
           By registering, you agree to our{' '}
           <button
             type="button"
-            className="font-medium text-blue-600 hover:text-blue-500"
+            className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
             onClick={() => alert('Terms of Service not implemented yet')}
           >
             Terms of Service
@@ -236,7 +253,7 @@ const Register = () => {
           and{' '}
           <button
             type="button"
-            className="font-medium text-blue-600 hover:text-blue-500"
+            className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
             onClick={() => alert('Privacy Policy not implemented yet')}
           >
             Privacy Policy
@@ -247,4 +264,4 @@ const Register = () => {
   );
 };
 
-export default Register;
+export default React.memo(Register);
