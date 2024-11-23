@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import ioClient from 'socket.io-client';
+import { BE_API_URL } from '../../const';
 
 const Register = () => {
   // Initial form state
@@ -18,7 +19,7 @@ const Register = () => {
   const navigate = useNavigate();
 
   // Memoize API URL
-  const API_URL = useMemo(() => 'http://3.23.98.221/:5000', []);
+  const API_URL = useMemo(() => `${BE_API_URL}`, []);
 
   // Validation rules
   const validationRules = useMemo(() => ({

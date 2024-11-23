@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { BE_API_URL } from '../../const';
 
 const ChatSidebar = ({ 
   friends, 
@@ -17,7 +18,7 @@ const ChatSidebar = ({
     if (!token) return;
     try {
       setLoading(true);
-      const response = await fetch('http://3.23.98.221/:5000/api/friends/pending', {
+      const response = await fetch(`${BE_API_URL}/api/friends/pending`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -42,7 +43,7 @@ const ChatSidebar = ({
   const handleAcceptRequest = async (requestId) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://3.23.98.221/:5000/api/friends/accept/${requestId}`, {
+      const response = await fetch(`${BE_API_URL}/api/friends/accept/${requestId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -64,7 +65,7 @@ const ChatSidebar = ({
   const handleRejectRequest = async (requestId) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://3.23.98.221/:5000/api/friends/reject/${requestId}`, {
+      const response = await fetch(`${BE_API_URL}/api/friends/reject/${requestId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
