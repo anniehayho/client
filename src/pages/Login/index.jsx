@@ -10,7 +10,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   // Memoize API URL
-  const API_URL = useMemo(() => 'http://localhost:5000', []);
+  const API_URL = useMemo(() => 'http://3.23.98.221/:5000', []);
 
   // Memoize input change handler
   const handleInputChange = useCallback((e) => {

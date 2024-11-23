@@ -21,7 +21,7 @@ const ChatWindow = () => {
   // API calls
   const fetchFriends = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/friends/list', {
+      const response = await fetch('http://3.23.98.221/:5000/api/friends/list', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -37,7 +37,7 @@ const ChatWindow = () => {
   const fetchMessages = useCallback(async (friendId) => {
     if (!friendId) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/messages/${friendId}`, {
+      const response = await fetch(`http://3.23.98.221/:5000/api/messages/${friendId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -66,7 +66,7 @@ const ChatWindow = () => {
       return;
     }
 
-    socket.current = ioClient('http://localhost:5000', {
+    socket.current = ioClient('http://3.23.98.221/:5000', {
       auth: { token },
     });
 
@@ -106,7 +106,7 @@ const ChatWindow = () => {
     if (!newMessage.trim() || !selectedFriend) return;
 
     try {
-      const response = await fetch('http://localhost:5000/api/messages', {
+      const response = await fetch('http://3.23.98.221/:5000/api/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

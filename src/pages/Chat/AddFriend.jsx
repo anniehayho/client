@@ -14,13 +14,13 @@ const AddFriend = ({ token, onlineUsers }) => {
     setIsLoading(true);
     try {
       const [usersResponse, friendsResponse, requestsResponse] = await Promise.all([
-        fetch('http://localhost:5000/api/users', {
+        fetch('http://3.23.98.221/:5000/api/users', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:5000/api/friends/list', {
+        fetch('http://3.23.98.221/:5000/api/friends/list', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:5000/api/friends/pending', {
+        fetch('http://3.23.98.221/:5000/api/friends/pending', {
           headers: { Authorization: `Bearer ${token}` },
         })
       ]);
@@ -47,7 +47,7 @@ const AddFriend = ({ token, onlineUsers }) => {
     if (!token || !userId) return;
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/friends/request', {
+      const response = await fetch('http://3.23.98.221/:5000/api/friends/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ const AddFriend = ({ token, onlineUsers }) => {
     if (!token || !requestId) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/friends/reject/${requestId}`, {
+      const response = await fetch(`http://3.23.98.221/:5000/api/friends/reject/${requestId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
