@@ -48,7 +48,7 @@ const AddFriend = ({ token, onlineUsers }) => {
     if (!token || !userId) return;
     setIsLoading(true);
     try {
-      const response = await fetch('${BE_API_URL}/api/friends/request', {
+      const response = await fetch(`${BE_API_URL}/api/friends/request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
