@@ -21,15 +21,41 @@ jobs:
         echo "$SSH_KEY" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan $SSH_HOST >> ~/.ssh/known_hosts
+        # Add keep-alive settings
+        echo "ServerAliveInterval 60" >> ~/.ssh/config
+        echo "ServerAliveCountMax 10" >> ~/.ssh/config
 
-    - name: Deploy to EC2
+    - name: Pull latest changes
       run: |
-        ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+        ssh -o ConnectTimeout=30 -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
           cd downloads/client &&
-          git pull origin main &&
-          cd .. &&
-          docker-compose -f docker-compose.yml down &&
-          docker system prune -a -f &&
+          git pull origin main
+        '
+
+    - name: Stop running containers
+      run: |
+        ssh -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+          cd downloads &&
+          docker-compose -f docker-compose.yml down || true
+        '
+
+    - name: Clean docker system
+      run: |
+        ssh -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+          docker system prune -a -f || true
+        '
+
+    - name: Build and start containers
+      run: |
+        ssh -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+          cd downloads &&
           docker-compose -f docker-compose.yml build &&
           docker-compose -f docker-compose.yml up -d
+        '
+
+    - name: Verify deployment
+      run: |
+        ssh -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+          cd downloads &&
+          docker-compose -f docker-compose.yml ps
         '
