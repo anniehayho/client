@@ -14,10 +14,11 @@ jobs:
     steps:
     - name: Connect to EC2 instance
       run: |
-
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/deploy_key
-        chmod 600 ~/deploy_key
-        ssh -i "~/deploy_key" ec2-user@3.136.200.153 "
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~ /.ssh/deploy_key
+        ssh-keyscan 3.136.200.153 >> ~/.ssh/known_hosts
+        ssh -i "~/.ssh/deploy_key" ec2-user@3.136.200.153 "
           cd downloads
           cd client 
           git pull origin main
