@@ -12,16 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Configure SSH
-      run: |
-        mkdir -p ~/.ssh/
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H 3.136.200.153 >> ~/.ssh/known_hosts
-
     - name: Deploy Frontend to EC2
-      run: |
-        ssh -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: '3.136.200.153'
+        username: 'ec2-user'
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: '22'
+        script: |
           # Navigate to client directory and update code
           cd ~/client
           git pull origin main
@@ -33,4 +31,3 @@ jobs:
           docker-compose -f dockercompose.yml stop frontend-client
           docker-compose -f dockercompose.yml build client
           docker-compose -f dockercompose.yml up -d client
-        '
