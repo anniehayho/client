@@ -12,19 +12,24 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Connect to EC2 instance
+    - name: Configure SSH
+      env:
+        SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        SSH_HOST: 3.136.200.153
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~ /.ssh/deploy_key
-        ssh-keyscan 3.136.200.153 >> ~/.ssh/known_hosts
-        ssh -i "~/.ssh/deploy_key" ec2-user@3.136.200.153 "
-          cd downloads
-          cd client 
-          git pull origin main
-          cd ..
-          docker-compose -f dockercompose.yml down
-          docker system prune -a -f
-          docker-compose -f dockercompose.yml build
-          docker-compose -f dockercompose.yml up -d
-        "
+        echo "$SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan $SSH_HOST >> ~/.ssh/known_hosts
+
+    - name: Deploy to EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@3.136.200.153 '
+          cd downloads/client &&
+          git pull origin main &&
+          cd .. &&
+          docker-compose -f docker-compose.yml down &&
+          docker system prune -a -f &&
+          docker-compose -f docker-compose.yml build &&
+          docker-compose -f docker-compose.yml up -d
+        '
