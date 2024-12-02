@@ -1,56 +1,32 @@
-name: Deploy Client
+name: Deploy Frontend Client to EC2
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build project
-        run: npm run build
-
-      - name: Archive production artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: production-artifacts
-          path: build/
-
   deploy:
     runs-on: ubuntu-latest
-    needs: build
-
+    
     steps:
-      - name: Download production artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: production-artifacts
-          path: build/
-
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Deploy to EC2
-        run: |
-          scp -o StrictHostKeyChecking=no -r build/* ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/path/to/client
-          ssh -o StrictHostKeyChecking=no ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} << 'EOF'
-          cd /path/to/client
-          docker-compose down
-          docker-compose up -d --build
-          EOF
+    - name: Deploy Frontend to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: '3.136.200.153'
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Navigate to client directory and update code
+          cd ~/client
+          git pull origin main
+          
+          # Navigate to docker-compose directory
+          cd ~/docker-compose
+          
+          # Rebuild and restart the frontend container
+          docker-compose -f dockercompose.yml stop frontend-client
+          docker-compose -f dockercompose.yml build frontend-client
+          docker-compose -f dockercompose.yml up -d frontend-client
